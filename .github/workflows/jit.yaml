@@ -1,0 +1,148 @@
+name: Permission Request
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'email'
+        required: true
+        type: string
+      permission_request:
+        description: "Select the permission you want to request."
+        required: true
+        type: choice
+        options:
+        - kubernetes-jit-ro-access
+        - kubernetes-jit-rw-access
+        - rds-mysql-jit-access
+        - rds-pgsql-jit-access
+      reason:
+        description: 'request reason'
+        required: true
+        type: string
+      duration:
+        description: 'access duration default 8 hours (unit: secs)'
+        required: true
+        default: "28800"
+      debug_console:
+        description: 'turn on tmate SSH connection for debuging. (on/off)'
+        required: true
+        default: 'off'
+        type: choice
+        options:
+        - 'off'
+        - 'on'
+
+jobs:
+  request-permission:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: generate grants
+      id: grants
+      if: ${{
+            github.event.inputs.permission_request == 'kubernetes-jit-ro-access' ||
+            github.event.inputs.permission_request == 'kubernetes-jit-rw-access'
+          }}
+      run: |
+        export EMAIL=${{ inputs.email }}
+        export DURATION=${{ inputs.duration }}
+        case ${{ github.event.inputs.permission_request }} in
+          "kubernetes-jit-ro-access"|"kubernetes-jit-rw-access")
+            cat <<EOF > "jit/$(date +"%Y%m%d%H%M%S")_${DURATION}_${EMAIL%%@*}.json"
+        {
+          "grants": [
+            {
+              "src": [
+                "${EMAIL}"
+              ],
+              "dst": [
+                "tag:k8s-operator"
+              ],
+              "app": {
+                "tailscale.com/cap/kubernetes": [
+                  {
+                    "impersonate": {
+                      "groups": [
+                        "oidc:${{ inputs.permission_request }}"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+        EOF
+            ;;
+          *)
+            echo "No matching conditions in grants section."
+            ;;
+        esac
+
+    - name: generate acls
+      id: acls
+      if: ${{
+            github.event.inputs.permission_request == 'rds-mysql-jit-access' ||
+            github.event.inputs.permission_request == 'rds-pgsql-jit-access'
+          }}
+      run: |
+        export EMAIL=${{ inputs.email }}
+        export DURATION=${{ inputs.duration }}
+        case ${{ github.event.inputs.permission_request }} in
+          "rds-mysql-jit-access")
+            export CIDR="10.1.1.1/32:*"
+            ;;
+          "rds-pgsql-jit-access")
+            export CIDR="10.2.2.2/32:*"
+            ;;
+        esac
+        cat <<EOF > "jit/$(date +"%Y%m%d%H%M%S")_${DURATION}_${EMAIL%%@*}.json"
+        {
+          "acls": [
+            {
+              "action": "accept",
+              "src": [
+                "${EMAIL}"
+              ],
+              "dst": [
+                "${CIDR}"
+              ]
+            }
+          ]
+        }
+        EOF
+
+    - name: merge file in jit folder
+      uses: ./.github/actions/merge-file
+
+    - name: Create a pull request
+      id: cpr
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: jit-${{ github.run_number }}
+        base: main
+        title: "Permission Request: ${{ inputs.email }}: request ${{ inputs.permission_request }}"
+        body: |
+          Permission Request:
+            User:   ${{ inputs.email }}
+            Role:   ${{ inputs.permission_request }}
+            Reason: ${{ inputs.reason }}
+
+#    - name: Send MS Teams notification for pending request
+#      if: ${{ success() }}
+#      uses: tlolkema/simple-teams-message@main
+#      with:
+#        webhook: ${{ env.MS_TEAMS_WEBHOOK }}
+#        image_url: ${{ env.IMAGE_URL }}
+#        message_title: "Tailscale Request PENDING    ⌛"
+#        message_description: "*** Permission request deatil ***"
+#        extra_text_blocks: "User: ${{ inputs.email }}|||Role: ${{ inputs.permission_request }}|||Duration: ${{ inputs.duration }} secs|||Reason: ${{ inputs.reason }}"
+
+    - name: Setup tmate session
+      if: ${{ failure() && inputs.debug_console == 'on' }}
+      uses: mxschmitt/action-tmate@v3

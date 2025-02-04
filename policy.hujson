@@ -1,0 +1,31 @@
+{
+  "acls": [
+    {
+      "action": "accept",
+      "dst": [
+        "tag:k8s-operator:*",
+        "tag:k8s-connector:*"
+      ],
+      "src": [
+        "*"
+      ]
+    }
+  ],
+  "autoApprovers": {
+    "routes": {
+      "10.1.1.1/32": [
+        "tag:k8s-connector"
+      ],
+      "10.2.2.2/32": [
+        "tag:k8s-connector"
+      ]
+    }
+  },
+  "grants": [],
+  "tagOwners": {
+    "tag:k8s-connector": [
+      "tag:k8s-operator"
+    ],
+    "tag:k8s-operator": []
+  }
+}

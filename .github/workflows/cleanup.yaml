@@ -1,0 +1,73 @@
+name: Clean Up Expire Files
+
+on:
+  workflow_dispatch:
+    inputs:
+      EXPIRATION_TIME:
+        description: "expiration time (secs)"
+        required: false
+  schedule:
+  - cron: "*/5 * * * *"  # run every 5 mins
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Cancel Previous Runs
+      uses: styfle/cancel-workflow-action@0.12.1
+      with:
+        all_but_latest: true
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Clean up expire file
+      run: |
+        DIR="./jit"
+        CURRENT_TIMESTAMP=$(date +%s)
+        EXPIRATION_TIME=${{ github.event.inputs.EXPIRATION_TIME }}
+
+        find "$DIR" -name '*.json' | while read -r file; do
+          file_name=$(basename "$file")
+          file_date=${file_name:0:14}
+          file_duration=$(echo $file_name | awk -F'_' {'print $2'})
+          MAX_AGE=${EXPIRATION_TIME:-$file_duration}
+
+          # check file_date format 
+          if [[ "$file_date" =~ ^[0-9]{14}$ ]]; then
+            file_timestamp=$(date -d "${file_date:0:4}-${file_date:4:2}-${file_date:6:2} ${file_date:8:2}:${file_date:10:2}:${file_date:12:2}" +%s)
+            time_diff=$((CURRENT_TIMESTAMP - file_timestamp))
+            if (( time_diff > MAX_AGE )); then
+              echo "Deleting: $file (dated: $file_date)"
+              rm "$file"
+            fi
+          else
+            echo "Skipping: $file (invalid date format)"
+          fi
+        done
+
+    - name: merge file in jit folder
+      uses: ./.github/actions/merge-file
+
+    - name: Create a pull request
+      id: cpr
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: cleanup-${{ github.run_number }}
+        title: "clean up expire request"
+
+    - name: Auto approve
+      if: ${{ steps.cpr.outputs.pull-request-operation == 'created' }}
+      run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
+      env:
+        GH_TOKEN: ${{ secrets.GH_PAT }}
+
+    - name: Enable Pull Request Automerge
+      if: ${{ steps.cpr.outputs.pull-request-operation == 'created' }}
+      uses: peter-evans/enable-pull-request-automerge@v3
+      with:
+        token: ${{ secrets.GH_PAT }}
+        pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+

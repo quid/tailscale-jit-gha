@@ -1,0 +1,113 @@
+name: Sync Tailscale ACLs
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: 'force sync. (yes/no)'
+        required: false
+        default: 'no'
+        type: choice
+        options:
+        - 'no'
+        - 'yes'
+      force_test:
+        description: 'force test. (yes/no)'
+        required: false
+        default: 'no'
+        type: choice
+        options:
+        - 'no'
+        - 'yes'
+      debug_console:
+        description: 'turn on tmate SSH connection for debuging. (on/off)'
+        required: true
+        default: 'off'
+        type: choice
+        options:
+        - 'off'
+        - 'on'
+
+jobs:
+  sync-acls:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Cancel Previous Runs
+      uses: styfle/cancel-workflow-action@0.12.1
+      with:
+        all_but_latest: true
+
+    - uses: actions/checkout@v4
+
+    - name: Get changed files
+      id: changed-files-specific
+      uses: tj-actions/changed-files@v44
+      with:
+       files: |
+          default.hujson
+          policy.hujson
+
+    - name: Set environment variable
+      run: |
+        echo "TAILSCALE_GITOPS_TAILNET is ${TAILSCALE_GITOPS_TAILNET}"
+        echo "TAILSCALE_GITOPS_TAILNET=${TAILSCALE_GITOPS_TAILNET}" >> $GITHUB_ENV
+        echo "TAILSCALE_GITOPS_TAILNET is ${TAILSCALE_GITOPS_TAILNET}"
+        echo "TAILSCALE_GITOPS_ID=${TAILSCALE_GITOPS_ID}" >> $GITHUB_ENV
+        echo "TAILSCALE_GITOPS_SECRET=${TAILSCALE_GITOPS_SECRET}" >> $GITHUB_ENV
+
+    - name: merge file in jit folder
+      uses: ./.github/actions/merge-file
+
+    - name: Deploy ACL
+      if: ${{ inputs.force_sync == 'yes' || (github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true') }}
+      id: deploy-acl
+      uses: tailscale/gitops-acl-action@v1
+      with:
+        tailnet: ${{ env.TAILSCALE_GITOPS_TAILNET }}
+        oauth-client-id: ${{ env.TAILSCALE_GITOPS_ID }}
+        oauth-secret: ${{ env.TAILSCALE_GITOPS_SECRET }}
+        action: apply
+
+    - name: Test ACL
+      if: ${{ inputs.force_test == 'yes' || (github.event_name == 'pull_request' && steps.changed-files-specific.outputs.any_changed == 'true') }}
+      id: test-acl
+      uses: tailscale/gitops-acl-action@v1
+      with:
+        tailnet: ${{ env.TAILSCALE_GITOPS_TAILNET }}
+        oauth-client-id: ${{ env.TAILSCALE_GITOPS_ID }}
+        oauth-secret: ${{ env.TAILSCALE_GITOPS_SECRET }}
+        action: test
+
+    - name: Create a pull request
+      if: ${{ inputs.force_sync == 'yes' || (github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true') }}
+      id: cpr
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: sync-${{ github.run_number }}
+        title: "format default.hujson and policy.json"
+        add-paths: |
+          default.hujson
+          policy.hujson
+
+    - name: Auto approve
+      if: ${{ (inputs.force_sync == 'yes' || (github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true')) && steps.cpr.outputs.pull-request-operation == 'created' }}
+      run: gh pr review --approve "${{ steps.cpr.outputs.pull-request-number }}"
+      env:
+        GH_TOKEN: ${{ secrets.GH_PAT }}
+
+    - name: Enable Pull Request Automerge
+      if: ${{ (inputs.force_sync == 'yes' || (github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true')) && steps.cpr.outputs.pull-request-operation == 'created' }}
+      uses: peter-evans/enable-pull-request-automerge@v3
+      with:
+        token: ${{ secrets.GH_PAT }}
+        pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+
+    - name: Setup tmate session
+      if: ${{ failure() && inputs.debug_console == 'on' }}
+      uses: mxschmitt/action-tmate@v3

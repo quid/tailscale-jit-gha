@@ -1,0 +1,23 @@
+name: Merge file
+description: This action will merge file in jit folder
+
+runs:
+  using: "composite"
+  steps:
+  - name: merge file in jit folder
+    shell: bash
+    run: |
+      jq -S . default.hujson > /tmp/default.hujson && mv -f /tmp/default.hujson default.hujson
+      if [ -z "$(find jit -name "*.json" -type f)" ]; then
+        echo "No json file in jit folder"
+        cp default.hujson policy.hujson
+        sed -i "1i // This tailnet's ACLs are maintained in https://github.com/quid/tailscale-jit-gha" policy.hujson
+      else
+        echo "Merge json in jit folder"
+        jq 'del(.grants, .acls)' default.hujson > /tmp/all_without_grants_and_acls.json
+        jq -s 'reduce .[] as $item ({}; .grants += ($item.grants // []))' default.hujson jit/*.json > /tmp/grants.json
+        jq -s 'reduce .[] as $item ({}; .acls += ($item.acls // []))' default.hujson jit/*.json > /tmp/acls.json
+        jq -s 'add' /tmp/all_without_grants_and_acls.json /tmp/acls.json /tmp/grants.json > policy.hujson
+        jq -S . policy.hujson > /tmp/policy.hujson && mv -f /tmp/policy.hujson policy.hujson
+        sed -i "1i // This tailnet's ACLs are maintained in https://github.com/quid/tailscale-jit-gha" policy.hujson
+      fi
