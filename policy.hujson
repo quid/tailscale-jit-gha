@@ -1,3 +1,4 @@
+// This tailnet's ACLs are maintained in https://github.com/quid/tailscale-jit-gha
 {
   "acls": [
     {
