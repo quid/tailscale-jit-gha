@@ -38,15 +38,15 @@ jobs:
 
     steps:
     - name: Cancel Previous Runs
-      uses: styfle/cancel-workflow-action@0.12.1
+      uses: styfle/cancel-workflow-action@0.13.1
       with:
         all_but_latest: true
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Get changed files
       id: changed-files-specific
-      uses: tj-actions/changed-files@v45
+      uses: tj-actions/changed-files@v47
       with:
        files: |
           default.hujson
@@ -86,7 +86,7 @@ jobs:
     - name: Create a pull request
       if: ${{ inputs.force_sync == 'yes' || (github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true') }}
       id: cpr
-      uses: peter-evans/create-pull-request@v6
+      uses: peter-evans/create-pull-request@v8
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         branch: sync-${{ github.run_number }}
