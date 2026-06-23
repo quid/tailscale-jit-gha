@@ -38,15 +38,15 @@ jobs:
 
     steps:
     - name: Cancel Previous Runs
-      uses: styfle/cancel-workflow-action@0.13.1
+      uses: styfle/cancel-workflow-action@d07a454dad7609a92316b57b23c9ccfd4f59af66 # 0.13.1
       with:
         all_but_latest: true
 
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
     - name: Get changed files
       id: changed-files-specific
-      uses: tj-actions/changed-files@v47
+      uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47
       with:
        files: |
           default.hujson
@@ -66,7 +66,7 @@ jobs:
     - name: Deploy ACL
       if: ${{ inputs.force_sync == 'yes' || (github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true') }}
       id: deploy-acl
-      uses: tailscale/gitops-acl-action@v1
+      uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1
       with:
         tailnet: ${{ env.TAILSCALE_GITOPS_TAILNET }}
         oauth-client-id: ${{ env.TAILSCALE_GITOPS_ID }}
@@ -76,7 +76,7 @@ jobs:
     - name: Test ACL
       if: ${{ inputs.force_test == 'yes' || (github.event_name == 'pull_request' && steps.changed-files-specific.outputs.any_changed == 'true') }}
       id: test-acl
-      uses: tailscale/gitops-acl-action@v1
+      uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1
       with:
         tailnet: ${{ env.TAILSCALE_GITOPS_TAILNET }}
         oauth-client-id: ${{ env.TAILSCALE_GITOPS_ID }}
@@ -86,7 +86,7 @@ jobs:
     - name: Create a pull request
       if: ${{ inputs.force_sync == 'yes' || (github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true') }}
       id: cpr
-      uses: peter-evans/create-pull-request@v8
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         branch: sync-${{ github.run_number }}
@@ -103,11 +103,11 @@ jobs:
 
     - name: Enable Pull Request Automerge
       if: ${{ (inputs.force_sync == 'yes' || (github.event_name == 'push' && steps.changed-files-specific.outputs.any_changed == 'true')) && steps.cpr.outputs.pull-request-operation == 'created' }}
-      uses: peter-evans/enable-pull-request-automerge@v3
+      uses: peter-evans/enable-pull-request-automerge@a660677d5469627102a1c1e11409dd063606628d # v3
       with:
         token: ${{ secrets.GH_PAT }}
         pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
 
     - name: Setup tmate session
       if: ${{ failure() && inputs.debug_console == 'on' }}
-      uses: mxschmitt/action-tmate@v3
+      uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113 # v3
