@@ -39,7 +39,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
     - name: generate grants
       id: grants
@@ -121,7 +121,7 @@ jobs:
 
     - name: Create a pull request
       id: cpr
-      uses: peter-evans/create-pull-request@v8
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         branch: jit-${{ github.run_number }}
@@ -145,4 +145,4 @@ jobs:
 
     - name: Setup tmate session
       if: ${{ failure() && inputs.debug_console == 'on' }}
-      uses: mxschmitt/action-tmate@v3
+      uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113 # v3
